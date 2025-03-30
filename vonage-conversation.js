@@ -1,7 +1,6 @@
 require('dotenv').config();
 const { Vonage } = require('@vonage/server-sdk');
 const express = require('express');
-const { processMessage, initializeState, processDailyNews, processEmailUpdates } = require('./dist/lib/orchestrator');
 const app = express();
 
 // Enable JSON parsing for incoming webhooks
@@ -11,38 +10,11 @@ app.use(express.json());
 const vonage = new Vonage({
   apiKey: process.env.VONAGE_API_KEY,
   apiSecret: process.env.VONAGE_API_SECRET,
-  applicationId: process.env.VONAGE_APPLICATION_ID,
-  privateKey: process.env.VONAGE_PRIVATE_KEY
+  applicationId: process.env.VONAGE_APPLICATION_ID
 });
 
 // Default sender number
 const DEFAULT_FROM = process.env.VONAGE_PHONE_NUMBER || "447418343907";
-
-// Initialize agent state
-let agentState = initializeState();
-
-// Message status codes and their meanings
-const MESSAGE_STATUSES = {
-  '0': 'Success',
-  '1': 'Throttled',
-  '2': 'Missing Parameters',
-  '3': 'Invalid Parameters',
-  '4': 'Invalid Credentials',
-  '5': 'Internal Error',
-  '6': 'Invalid Message',
-  '7': 'Number Barred',
-  '8': 'Partner Account Barred',
-  '9': 'Partner Quota Exceeded',
-  '10': 'Too Many Existing Binds',
-  '11': 'Account Not Enabled For REST',
-  '12': 'Message Too Long',
-  '13': 'Communication Failed',
-  '14': 'Invalid Signature',
-  '15': 'Invalid Sender Address',
-  '16': 'Invalid TTL',
-  '19': 'Facility Not Allowed',
-  '20': 'Invalid Message Class'
-};
 
 // Enhanced logging function
 function logMessage(type, data) {
@@ -65,17 +37,12 @@ async function sendSMS(to, text, from = DEFAULT_FROM) {
       text
     });
 
-    // Log the response with detailed status information
+    // Log the response
     const messageDetails = response.messages[0];
-    const status = MESSAGE_STATUSES[messageDetails.status] || 'Unknown Status';
-    
     logMessage('SEND_RESPONSE', {
       success: messageDetails.status === '0',
       messageId: messageDetails['message-id'],
-      status: {
-        code: messageDetails.status,
-        description: status
-      },
+      status: messageDetails.status,
       to: messageDetails.to,
       remainingBalance: messageDetails['remaining-balance'],
       price: messageDetails['message-price'],
@@ -103,22 +70,17 @@ async function sendAgentUpdate(to, message) {
   }
 }
 
-// Process incoming messages through the agent
+// Process incoming messages
 async function processIncomingMessage(text, from) {
   try {
-    // Process message through orchestrator
-    const { response, state } = await processMessage(text, agentState);
-    
-    // Update agent state
-    agentState = state;
-    
-    // Send response
+    // Simple response for now
+    const response = `I received your message: "${text}". I'm a simple agent for now, but I'll be smarter soon!`;
     await sendSMS(from, response);
     
-    // Log state update
-    logMessage('STATE_UPDATE', { 
-      lastTopic: state.context.lastTopic,
-      lastAction: state.context.lastAction
+    logMessage('MESSAGE_PROCESSED', { 
+      from,
+      text,
+      response
     });
   } catch (error) {
     logMessage('PROCESSING_ERROR', { error: error.message, from, text });
@@ -178,40 +140,8 @@ app.get('/health', (req, res) => {
     status: 'ok',
     timestamp: new Date().toISOString(),
     vonageInitialized: !!vonage,
-    defaultSender: DEFAULT_FROM,
-    agentState: {
-      lastTopic: agentState.context.lastTopic,
-      preferences: agentState.preferences
-    }
+    defaultSender: DEFAULT_FROM
   });
-});
-
-// Daily news endpoint
-app.post('/daily-news', async (req, res) => {
-  try {
-    const result = await processDailyNews(agentState);
-    if (result.success) {
-      res.json({ success: true, message: 'Daily news processed successfully' });
-    } else {
-      res.status(500).json({ success: false, error: result.error });
-    }
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Email updates endpoint
-app.post('/email-updates', async (req, res) => {
-  try {
-    const result = await processEmailUpdates(agentState);
-    if (result.success) {
-      res.json({ success: true, message: 'Email updates processed successfully' });
-    } else {
-      res.status(500).json({ success: false, error: result.error });
-    }
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
 });
 
 // Error handling middleware
@@ -237,12 +167,4 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 // Export for Vercel
-module.exports = app;
-
-// Test message if running directly
-if (require.main === module) {
-  const testNumber = process.env.TWILIO_USER_PHONE_NUMBER;
-  sendSMS(testNumber, 'Test message from Vonage Conversation API with enhanced logging!')
-    .then(() => console.log('Test message sent'))
-    .catch(error => console.error('Test failed:', error));
-} 
+module.exports = app; 
