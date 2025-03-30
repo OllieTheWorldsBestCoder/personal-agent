@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "vonage-conversation.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/status",
+      "dest": "vonage-conversation.js"
+    },
+    {
+      "src": "/inbound",
+      "dest": "vonage-conversation.js"
+    },
+    {
+      "src": "/health",
+      "dest": "vonage-conversation.js"
+    },
+    {
+      "src": "/test-message",
+      "dest": "vonage-conversation.js"
+    }
+  ]
+} 
