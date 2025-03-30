@@ -1,9 +1,9 @@
-import { Twilio } from 'twilio';
+import twilio from 'twilio';
 import { CONFIG } from '../config';
 import { processMessage } from '../orchestrator';
 
 // Initialize Twilio client
-const twilioClient = new Twilio(
+const twilioClient = twilio(
   CONFIG.TWILIO.accountSid,
   CONFIG.TWILIO.authToken
 );
@@ -102,16 +102,91 @@ export async function sendMessage(
   }
 }
 
-// Function to verify Twilio webhook signature
-export const verifyTwilioSignature = (
+/**
+ * Send text message via WhatsApp
+ */
+export async function sendTextMessage(
+  to: string,
+  text: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await twilioClient.messages.create({
+      body: text,
+      from: `whatsapp:${CONFIG.TWILIO.whatsappNumber}`,
+      to: `whatsapp:${to}`,
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error sending WhatsApp message:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+/**
+ * Send daily news update
+ */
+export async function sendDailyNews(
+  summary: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const result = await sendTextMessage(
+      CONFIG.TWILIO.userPhoneNumber,
+      `📰 Daily News Update\n\n${summary}`
+    );
+
+    return result;
+  } catch (error) {
+    console.error('Error sending daily news:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+/**
+ * Process incoming WhatsApp message
+ */
+export async function processIncomingMessage(
+  message: string,
+  from: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Echo back the message for now
+    const result = await sendTextMessage(from, `Echo: ${message}`);
+    return result;
+  } catch (error) {
+    console.error('Error processing WhatsApp message:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+/**
+ * Verify Twilio request signature
+ */
+export function verifySignature(
+  signature: string,
   url: string,
-  params: Record<string, string>,
-  signature: string
-) => {
-  return twilioClient.validateRequest(
-    CONFIG.TWILIO.authToken,
-    signature,
-    url,
-    params
-  );
-}; 
+  params: Record<string, string>
+): boolean {
+  try {
+    const requestUrl = new URL(url);
+    const fullUrl = `${requestUrl.origin}${requestUrl.pathname}`;
+    return twilio.validateRequest(
+      CONFIG.TWILIO.authToken,
+      signature,
+      fullUrl,
+      params
+    );
+  } catch (error) {
+    console.error('Error verifying signature:', error);
+    return false;
+  }
+} 

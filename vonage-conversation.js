@@ -1,7 +1,7 @@
 require('dotenv').config();
 const { Vonage } = require('@vonage/server-sdk');
 const express = require('express');
-const { processMessage, initializeState, processDailyNews, processEmailUpdates } = require('./src/lib/orchestrator');
+const { processMessage, initializeState, processDailyNews, processEmailUpdates } = require('./dist/lib/orchestrator');
 const app = express();
 
 // Enable JSON parsing for incoming webhooks

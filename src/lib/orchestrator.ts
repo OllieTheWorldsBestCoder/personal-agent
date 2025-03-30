@@ -1,5 +1,5 @@
 import { CONFIG } from './config';
-import { getSmartResponse, generateVoiceNote } from './ai/client';
+import { getSmartResponse } from './ai/client';
 import { processIncomingMessage, sendDailyNews } from './whatsapp/client';
 import { getEmailSummary, getUnreadEmails, archiveEmail } from './email/client';
 import { getNewsSummary } from './news/client';
@@ -110,11 +110,8 @@ export async function processDailyNews(
     // Get news summary
     const newsSummary = await getNewsSummary();
 
-    // Generate voice note
-    const voiceNote = await generateVoiceNote(newsSummary.summary);
-
     // Send via WhatsApp
-    const result = await sendDailyNews(newsSummary.summary, voiceNote);
+    const result = await sendDailyNews(newsSummary.summary);
 
     // Update state
     state.context.lastNewsDate = new Date().toISOString();

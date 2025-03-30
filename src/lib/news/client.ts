@@ -10,9 +10,11 @@ export interface NewsArticle {
   title: string;
   description: string;
   url: string;
-  source: string;
+  source: {
+    name: string;
+  };
   publishedAt: string;
-  category: string;
+  content?: string;
 }
 
 // Type for news summary
@@ -24,20 +26,27 @@ export interface NewsSummary {
 /**
  * Get top headlines
  */
-export async function getTopHeadlines(): Promise<NewsArticle[]> {
+export async function getTopHeadlines(
+  category: string = 'general',
+  country: string = 'gb'
+): Promise<NewsArticle[]> {
   try {
     const response = await newsapi.v2.topHeadlines({
-      country: 'us',
+      category,
+      country,
       pageSize: 10,
+      language: 'en'
     });
 
-    return response.articles.map((article) => ({
-      title: article.title || '',
-      description: article.description || '',
-      url: article.url || '',
-      source: article.source?.name || '',
-      publishedAt: article.publishedAt || '',
-      category: article.category || 'general',
+    return response.articles.map((article: any) => ({
+      title: article.title,
+      description: article.description,
+      url: article.url,
+      source: {
+        name: article.source.name
+      },
+      publishedAt: article.publishedAt,
+      content: article.content
     }));
   } catch (error) {
     console.error('Error getting top headlines:', error);
@@ -46,31 +55,71 @@ export async function getTopHeadlines(): Promise<NewsArticle[]> {
 }
 
 /**
- * Get news summary with AI-generated overview
+ * Get news summary
  */
 export async function getNewsSummary(): Promise<NewsSummary> {
   try {
+    // Get top headlines
     const articles = await getTopHeadlines();
 
-    // Generate summary using AI
-    const aiResponse = await getSmartResponse(
+    // Generate summary
+    const summaryResponse = await getSmartResponse(
       [
         {
           role: 'user',
-          content: `Summarize these news headlines in a concise way:\n\n${articles
-            .map((article) => `- ${article.title}`)
-            .join('\n')}`,
-        },
+          content: `Summarize these news articles in a concise way:\n\n${articles
+            .map(
+              (a) =>
+                `${a.title}\n${a.description || ''}\nSource: ${
+                  a.source.name
+                }\n\n`
+            )
+            .join('')}`
+        }
       ],
       'simple'
     );
 
     return {
       articles,
-      summary: aiResponse.content,
+      summary: summaryResponse.content
     };
   } catch (error) {
     console.error('Error getting news summary:', error);
+    throw error;
+  }
+}
+
+/**
+ * Search news articles
+ */
+export async function searchNews(
+  query: string,
+  from?: string,
+  to?: string
+): Promise<NewsArticle[]> {
+  try {
+    const response = await newsapi.v2.everything({
+      q: query,
+      from,
+      to,
+      language: 'en',
+      sortBy: 'relevancy',
+      pageSize: 10
+    });
+
+    return response.articles.map((article: any) => ({
+      title: article.title,
+      description: article.description,
+      url: article.url,
+      source: {
+        name: article.source.name
+      },
+      publishedAt: article.publishedAt,
+      content: article.content
+    }));
+  } catch (error) {
+    console.error('Error searching news:', error);
     throw error;
   }
 }
@@ -93,9 +142,11 @@ export async function getNewsByCategory(
       title: article.title || '',
       description: article.description || '',
       url: article.url || '',
-      source: article.source?.name || '',
+      source: {
+        name: article.source?.name || ''
+      },
       publishedAt: article.publishedAt || '',
-      category: article.category || category,
+      content: article.content
     }));
   } catch (error) {
     console.error(`Error getting ${category} news:`, error);
