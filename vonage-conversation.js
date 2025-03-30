@@ -1,6 +1,7 @@
 require('dotenv').config();
 const { Vonage } = require('@vonage/server-sdk');
 const express = require('express');
+const { processMessage, initializeState, processDailyNews, processEmailUpdates } = require('./src/lib/orchestrator');
 const app = express();
 
 // Enable JSON parsing for incoming webhooks
@@ -15,7 +16,10 @@ const vonage = new Vonage({
 });
 
 // Default sender number
-const DEFAULT_FROM = "447418343907";
+const DEFAULT_FROM = process.env.VONAGE_PHONE_NUMBER || "447418343907";
+
+// Initialize agent state
+let agentState = initializeState();
 
 // Message status codes and their meanings
 const MESSAGE_STATUSES = {
@@ -89,6 +93,54 @@ async function sendSMS(to, text, from = DEFAULT_FROM) {
   }
 }
 
+// Function to send agent updates
+async function sendAgentUpdate(to, message) {
+  try {
+    await sendSMS(to, `🤖 ${message}`);
+    logMessage('AGENT_UPDATE', { to, message });
+  } catch (error) {
+    logMessage('UPDATE_ERROR', { error: error.message, to, message });
+  }
+}
+
+// Process incoming messages through the agent
+async function processIncomingMessage(text, from) {
+  try {
+    // Process message through orchestrator
+    const { response, state } = await processMessage(text, agentState);
+    
+    // Update agent state
+    agentState = state;
+    
+    // Send response
+    await sendSMS(from, response);
+    
+    // Log state update
+    logMessage('STATE_UPDATE', { 
+      lastTopic: state.context.lastTopic,
+      lastAction: state.context.lastAction
+    });
+  } catch (error) {
+    logMessage('PROCESSING_ERROR', { error: error.message, from, text });
+    await sendSMS(from, 'Sorry, I encountered an error processing your request. Please try again.');
+  }
+}
+
+// Webhook endpoint for inbound messages
+app.post('/inbound', (req, res) => {
+  logMessage('INBOUND_MESSAGE', req.body);
+  
+  const { msisdn: from, text } = req.body;
+  
+  if (text) {
+    processIncomingMessage(text, from).catch(error => {
+      logMessage('PROCESSING_ERROR', { error: error.message, from, text });
+    });
+  }
+  
+  res.status(200).end();
+});
+
 // Test endpoint to send a message
 app.post('/test-message', async (req, res) => {
   try {
@@ -101,11 +153,10 @@ app.post('/test-message', async (req, res) => {
       });
     }
 
-    const response = await sendSMS(to, text);
+    await sendAgentUpdate(to, text);
     res.json({
       success: true,
-      messageId: response.messages[0]['message-id'],
-      status: response.messages[0].status
+      message: 'Agent update sent successfully'
     });
   } catch (error) {
     res.status(500).json({
@@ -121,31 +172,46 @@ app.post('/status', (req, res) => {
   res.status(200).end();
 });
 
-// Webhook endpoint for inbound messages
-app.post('/inbound', (req, res) => {
-  logMessage('INBOUND_MESSAGE', req.body);
-  
-  // Here you can add logic to process the inbound message
-  const { msisdn: from, text } = req.body;
-  
-  // Example: Echo back the message
-  if (text) {
-    sendSMS(from, `Echo: ${text}`).catch(error => {
-      logMessage('ECHO_ERROR', { error: error.message, from, text });
-    });
-  }
-  
-  res.status(200).end();
-});
-
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     vonageInitialized: !!vonage,
-    defaultSender: DEFAULT_FROM
+    defaultSender: DEFAULT_FROM,
+    agentState: {
+      lastTopic: agentState.context.lastTopic,
+      preferences: agentState.preferences
+    }
   });
+});
+
+// Daily news endpoint
+app.post('/daily-news', async (req, res) => {
+  try {
+    const result = await processDailyNews(agentState);
+    if (result.success) {
+      res.json({ success: true, message: 'Daily news processed successfully' });
+    } else {
+      res.status(500).json({ success: false, error: result.error });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Email updates endpoint
+app.post('/email-updates', async (req, res) => {
+  try {
+    const result = await processEmailUpdates(agentState);
+    if (result.success) {
+      res.json({ success: true, message: 'Email updates processed successfully' });
+    } else {
+      res.status(500).json({ success: false, error: result.error });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 // Error handling middleware
