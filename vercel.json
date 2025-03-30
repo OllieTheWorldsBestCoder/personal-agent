@@ -6,22 +6,49 @@
       "use": "@vercel/node"
     }
   ],
-  "routes": [
+  "rewrites": [
     {
-      "src": "/status",
-      "dest": "vonage-conversation.js"
+      "source": "/status",
+      "destination": "/vonage-conversation.js"
     },
     {
-      "src": "/inbound",
-      "dest": "vonage-conversation.js"
+      "source": "/inbound",
+      "destination": "/vonage-conversation.js"
     },
     {
-      "src": "/health",
-      "dest": "vonage-conversation.js"
+      "source": "/health",
+      "destination": "/vonage-conversation.js"
     },
     {
-      "src": "/test-message",
-      "dest": "vonage-conversation.js"
+      "source": "/test-message",
+      "destination": "/vonage-conversation.js"
+    },
+    {
+      "source": "/daily-news",
+      "destination": "/vonage-conversation.js"
+    },
+    {
+      "source": "/email-updates",
+      "destination": "/vonage-conversation.js"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET, POST, PUT, DELETE, OPTIONS"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "X-API-Key, X-Requested-With, Content-Type, Accept"
+        }
+      ]
     }
   ]
 } 
